@@ -6,11 +6,23 @@ import pygame
 
 
 WIDTH, HEIGHT = 600, 400
-# Keep the player narrower than the 60-pixel hole so they can fall through it.
-PLAYER_SIZE = (55, 75)
+PLAYER_SIZE = (116, 64)
 GRAVITY = 0.5
 JUMP_SPEED = -10
 MOVE_SPEED = 5
+SPAWN_POSITION = (50, 350 - PLAYER_SIZE[1])
+CUPCAKE_SIZE = 24
+
+
+def draw_cupcake(surface, rect):
+    """Draw a small cupcake collectible."""
+    pygame.draw.rect(surface, (190, 115, 70), (rect.x + 3, rect.y + 9, rect.width - 6, rect.height - 9))
+    pygame.draw.polygon(
+        surface,
+        (255, 150, 190),
+        [(rect.x + 2, rect.y + 10), (rect.centerx, rect.y + 2), (rect.right - 2, rect.y + 10)],
+    )
+    pygame.draw.circle(surface, (255, 210, 225), (rect.centerx, rect.y + 6), 3)
 
 
 def load_player_image(player_size):
@@ -34,17 +46,22 @@ async def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Rehans trip to the store")
     clock = pygame.time.Clock()
+    font = pygame.font.Font(None, 28)
 
-    # Start on the left platform: its top is y=350.
-    player = pygame.Rect(50, 350 - PLAYER_SIZE[1], *PLAYER_SIZE)
+    player = pygame.Rect(*SPAWN_POSITION, *PLAYER_SIZE)
+    score = 0
+    cupcakes = [
+        pygame.Rect(180, 245, CUPCAKE_SIZE, CUPCAKE_SIZE),
+        pygame.Rect(410, 195, CUPCAKE_SIZE, CUPCAKE_SIZE),
+        pygame.Rect(520, 320, CUPCAKE_SIZE, CUPCAKE_SIZE),
+    ]
     player_velocity_y = 0
     on_ground = True
     player_image = load_player_image(player.size)
 
-    # The gap between x=280 and x=340 is a hole the player can fall through.
     platforms = [
-        pygame.Rect(0, 350, 280, 50),
-        pygame.Rect(340, 350, WIDTH - 340, 50),
+        pygame.Rect(0, 350, 240, 50),
+        pygame.Rect(360, 350, WIDTH - 360, 50),
         pygame.Rect(100, 270, 150, 20),
         pygame.Rect(350, 220, 150, 20),
     ]
@@ -71,15 +88,20 @@ async def main():
             player_velocity_y = JUMP_SPEED
             on_ground = False
 
-        # Move horizontally and keep the player inside the screen.
         player.x += player_velocity_x
         player.x = max(0, min(player.x, WIDTH - player.width))
 
-        # Move vertically and resolve landing collisions.
+
         previous_bottom = player.bottom
         player_velocity_y += GRAVITY
         player.y += round(player_velocity_y)
         on_ground = False
+
+        # Respawn the sprite if it falls below the level.
+        if player.top > HEIGHT:
+            player.topleft = SPAWN_POSITION
+            player_velocity_y = 0
+            on_ground = True
 
         for platform in platforms:
             falling_onto_platform = (
@@ -94,15 +116,25 @@ async def main():
                 player_velocity_y = 0
                 on_ground = True
 
+        # Collect cupcakes when the player touches them.
+        collected_cupcakes = [cupcake for cupcake in cupcakes if player.colliderect(cupcake)]
+        for cupcake in collected_cupcakes:
+            cupcakes.remove(cupcake)
+            score += 1
+
         screen.fill((135, 206, 235))
 
         for platform in platforms:
             pygame.draw.rect(screen, (100, 180, 100), platform)
 
+        for cupcake in cupcakes:
+            draw_cupcake(screen, cupcake)
+
+        score_text = font.render(f"Cupcakes: {score}", True, (40, 40, 40))
+        screen.blit(score_text, (10, 10))
+
         if player_image is not None:
             screen.blit(player_image, player)
-        else:
-            pygame.draw.rect(screen, (220, 80, 80), player)
 
         pygame.display.flip()
         clock.tick(60)
